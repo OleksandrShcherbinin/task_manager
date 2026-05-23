@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ task.title }}{% endblock %}
+
+{% block content %}
+<article class="task-detail {% if task.is_done %}task--done{% elif task.is_expired %}task--expired{% endif %}">
+    <header class="task-detail-header">
+        <h1>{{ task.title }}</h1>
+        <div class="task-meta">
+            <span class="badge priority--{{ task.priority|lower }}">{{ task.get_priority_display }}</span>
+            {% if task.due_date %}
+                <span class="due">Due {{ task.due_date|date:"M j, Y" }}</span>
+            {% else %}
+                <span class="due due--none">No due date</span>
+            {% endif %}
+            {% if task.is_expired %}<span class="badge badge-warn">Expired</span>{% endif %}
+            {% if task.is_done %}<span class="badge badge-done">Done</span>{% endif %}
+        </div>
+    </header>
+
+    {% if task.description %}
+        <section class="task-description">
+            <h2>Description</h2>
+            <p>{{ task.description|linebreaksbr }}</p>
+        </section>
+    {% endif %}
+
+    <section class="task-detail-meta">
+        <p><strong>Created:</strong> {{ task.created_at|date:"M j, Y H:i" }}</p>
+    </section>
+
+    <section class="task-detail-actions">
+        <form method="post" action="{% url 'tasks:toggle' task.pk %}" style="display:inline">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'tasks:detail' task.pk %}">
+            <button type="submit" class="btn">
+                {% if task.is_done %}Mark as not done{% else %}Mark as done{% endif %}
+            </button>
+        </form>
+        <a class="btn" href="{% url 'tasks:update' task.pk %}">Edit</a>
+        <a class="btn btn-danger" href="{% url 'tasks:delete' task.pk %}">Delete</a>
+        <a class="btn btn-ghost" href="{% url 'tasks:list' %}">Back to list</a>
+    </section>
+</article>
+{% endblock %}

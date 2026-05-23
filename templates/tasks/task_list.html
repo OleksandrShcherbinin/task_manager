@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block title %}All Tasks{% endblock %}
+
+{% block content %}
+<h1>Tasks</h1>
+
+<div class="list-layout">
+    <aside class="sidebar">
+        <div id="calendar"
+             class="calendar"
+             data-task-dates='{{ task_dates_json|safe }}'
+             data-selected="{{ selected_date }}"
+             data-today="{{ today_iso }}"
+             data-list-url="{% url 'tasks:list' %}">
+        </div>
+    </aside>
+
+    <div class="main-col">
+        <section class="filters">
+            <form method="get" class="filter-form">
+                <div class="filter-field">
+                    <label for="priority">Priority</label>
+                    <select name="priority" id="priority">
+                        <option value="">Any</option>
+                        {% for value, label in priority_choices %}
+                            <option value="{{ value }}" {% if current.priority == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-field">
+                    <label for="status">Status</label>
+                    <select name="status" id="status">
+                        {% for value, label in status_choices %}
+                            <option value="{{ value }}" {% if current.status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-field">
+                    <label for="due_from">Due from</label>
+                    <input type="date" name="due_from" id="due_from" value="{{ current.due_from }}">
+                </div>
+
+                <div class="filter-field">
+                    <label for="due_to">Due to</label>
+                    <input type="date" name="due_to" id="due_to" value="{{ current.due_to }}">
+                </div>
+
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-success">Apply</button>
+                    <a class="btn btn-warning" href="{% url 'tasks:list' %}">Clear</a>
+                </div>
+            </form>
+
+            <div class="presets">
+                <span class="presets-label">Quick:</span>
+                <a class="chip {% if current.preset == 'today' %}chip-active{% endif %}" href="?preset=today">Today</a>
+                <a class="chip {% if current.preset == 'week' %}chip-active{% endif %}" href="?preset=week">This Week</a>
+                <a class="chip {% if current.preset == 'overdue' %}chip-active{% endif %}" href="?preset=overdue">Overdue</a>
+            </div>
+        </section>
+
+        <ul class="task-list">
+            {% for task in tasks %}
+                <li class="task-card {% if task.is_done %}task--done{% elif task.is_expired %}task--expired{% endif %}">
+                    <form class="task-toggle" method="post" action="{% url 'tasks:toggle' task.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button type="submit" class="toggle-btn" aria-label="Toggle done">
+                            {% if task.is_done %}&#10003;{% else %}&#9711;{% endif %}
+                        </button>
+                    </form>
+
+                    <div class="task-main">
+                        <a class="task-title" href="{% url 'tasks:detail' task.pk %}">{{ task.title }}</a>
+                        <div class="task-meta">
+                            <span class="badge priority--{{ task.priority|lower }}">{{ task.get_priority_display }}</span>
+                            {% if task.due_date %}
+                                <span class="due">Due {{ task.due_date|date:"M j, Y" }}</span>
+                            {% else %}
+                                <span class="due due--none">No due date</span>
+                            {% endif %}
+                            {% if task.is_expired %}<span class="badge badge-warn">Expired</span>{% endif %}
+                            {% if task.is_done %}<span class="badge badge-done">Done</span>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="task-actions">
+                        <a class="btn btn-ghost" href="{% url 'tasks:update' task.pk %}">Edit</a>
+                        <a class="btn btn-ghost btn-danger" href="{% url 'tasks:delete' task.pk %}">Delete</a>
+                    </div>
+                </li>
+            {% empty %}
+                <li class="empty-state">No tasks match these filters. <a href="{% url 'tasks:create' %}">Create one</a>.</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+
+<script>
+(function () {
+    const el = document.getElementById('calendar');
+    if (!el) return;
+    const taskDates = new Set(JSON.parse(el.dataset.taskDates || '[]'));
+    const selected = el.dataset.selected || '';
+    const todayIso = el.dataset.today;
+    const listUrl = el.dataset.listUrl;
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const dayHeaders = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+    const initial = selected ? parseIso(selected) : parseIso(todayIso);
+    let viewYear = initial.getFullYear();
+    let viewMonth = initial.getMonth();
+
+    function parseIso(s) {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d);
+    }
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function iso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+
+    function render() {
+        const first = new Date(viewYear, viewMonth, 1);
+        // Monday-start: convert JS day (Sun=0..Sat=6) to Mon=0..Sun=6
+        const firstWeekday = (first.getDay() + 6) % 7;
+        const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+        let html = '';
+        html += '<div class="cal-header">';
+        html += '  <button type="button" class="cal-nav" data-step="-1" aria-label="Previous month">&laquo;</button>';
+        html += '  <div class="cal-title">' + monthNames[viewMonth] + ' ' + viewYear + '</div>';
+        html += '  <button type="button" class="cal-nav" data-step="1" aria-label="Next month">&raquo;</button>';
+        html += '</div>';
+
+        html += '<div class="cal-grid cal-headrow">';
+        for (const dh of dayHeaders) html += '<div class="cal-dow">' + dh + '</div>';
+        html += '</div>';
+
+        html += '<div class="cal-grid cal-days">';
+        for (let i = 0; i < firstWeekday; i++) html += '<div class="cal-cell cal-empty"></div>';
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateObj = new Date(viewYear, viewMonth, day);
+            const dateIso = iso(dateObj);
+            const classes = ['cal-cell', 'cal-day'];
+            if (dateIso === todayIso) classes.push('cal-today');
+            if (dateIso === selected) classes.push('cal-selected');
+            if (taskDates.has(dateIso)) classes.push('cal-has-tasks');
+            html += '<button type="button" class="' + classes.join(' ') + '" data-date="' + dateIso + '">' + day + '</button>';
+        }
+        html += '</div>';
+
+        html += '<div class="cal-footer">';
+        if (selected) {
+            html += '<a class="cal-clear" href="' + listUrl + '">Clear date filter</a>';
+        } else {
+            html += '<span class="cal-hint">Click a day to filter</span>';
+        }
+        html += '</div>';
+
+        el.innerHTML = html;
+    }
+
+    el.addEventListener('click', function (e) {
+        const navBtn = e.target.closest('.cal-nav');
+        if (navBtn) {
+            const step = parseInt(navBtn.dataset.step, 10);
+            viewMonth += step;
+            if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+            else if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+            render();
+            return;
+        }
+        const dayBtn = e.target.closest('.cal-day');
+        if (dayBtn) {
+            const d = dayBtn.dataset.date;
+            const params = new URLSearchParams(window.location.search);
+            params.set('due_from', d);
+            params.set('due_to', d);
+            params.delete('preset');
+            window.location.search = params.toString();
+        }
+    });
+
+    render();
+})();
+</script>
+{% endblock %}

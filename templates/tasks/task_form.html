@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}Edit task{% else %}New task{% endif %}{% endblock %}
+
+{% block content %}
+<h1>{% if form.instance.pk %}Edit task{% else %}New task{% endif %}</h1>
+
+<form method="post" class="task-form">
+    {% csrf_token %}
+    {% for field in form %}
+        <div class="form-field">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<small class="help">{{ field.help_text }}</small>{% endif %}
+            {% if field.errors %}<ul class="errors">{% for err in field.errors %}<li>{{ err }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+    {% endfor %}
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a class="btn btn-ghost" href="{% url 'tasks:list' %}">Cancel</a>
+    </div>
+</form>
+{% endblock %}
